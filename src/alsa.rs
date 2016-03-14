@@ -172,3 +172,11 @@ impl PCM<Prepared> {
         Ok(n_written as usize)
     }
 }
+
+impl <State> Drop for PCM<State> {
+    fn drop(&mut self) {
+        unsafe {
+            ffi::snd_pcm_close(self.i);
+        }
+    }
+}
