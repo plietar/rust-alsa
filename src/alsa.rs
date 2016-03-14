@@ -137,6 +137,11 @@ impl PCM<Open> {
             if err < 0 {
                 return Err((self, err as isize))
             }
+
+            let err = ffi::snd_pcm_prepare(self.i);
+            if err < 0 {
+                return Err((self, err as isize))
+            }
         }
 
         Ok(

@@ -9,4 +9,4 @@ name = "alsa"
 path = "src/alsa.rs"
 
 [dependencies]
-libc = "0.1.8"
+libc = "0.2"
