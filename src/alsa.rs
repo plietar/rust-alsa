@@ -128,12 +128,14 @@ impl PCM {
         assert_eq!(buffer.len() % channels, 0);
         assert_eq!(::std::mem::size_of::<T>(), self.sample_fmt.size());
 
-        let n_written = unsafe {
-            alsa_ok!(ffi::snd_pcm_writei(self.i, buffer.as_ptr() as *const libc::c_void,
-                                         buffer.len() as u64 / channels as u64))
-        };
-
-        Ok(n_written as usize)
+        Ok(unsafe {
+            let frames = ffi::snd_pcm_writei(self.i, buffer.as_ptr() as *const libc::c_void, buffer.len() as u64 / channels as u64);
+            if frames < 0 {
+                alsa_ok!(ffi::snd_pcm_recover(self.i, frames as libc::c_int, 0)) as usize
+            } else {
+                frames as usize
+            }
+        })
     }
 }
 
