@@ -22,16 +22,8 @@ macro_rules! alsa_ok {
     )
 }
 
-pub struct PCM<State> {
+pub struct PCM {
     i: *mut ffi::snd_pcm_t,
-    data: State
-}
-
-#[allow(missing_copy_implementations)]
-pub struct Open { #[allow(dead_code)] no_constr: () }
-
-#[allow(missing_copy_implementations)]
-pub struct Prepared {
     channels: usize,
     sample_fmt: Format
 }
@@ -109,60 +101,32 @@ impl Format {
     }
 }
 
-impl PCM<Open> {
-    pub fn open(name: &str, stream: Stream, mode: Mode) -> Result<PCM<Open>, isize> {
+impl PCM {
+    pub fn open(name: &str, stream: Stream, mode: Mode, format: Format, access: Access, channels: usize, rate: usize) -> Result<PCM, isize> {
         let mut pcm = PCM {
             i: ptr::null_mut(),
-            data: Open { no_constr: () }
+            channels: channels,
+            sample_fmt: format,
         };
 
         unsafe {
             let name = std::ffi::CString::new(name).unwrap();
-            alsa_ok!(
-                ffi::snd_pcm_open(&mut pcm.i, name.as_ptr(), stream.to_ffi(), mode.to_ffi())
-            );
+            alsa_ok!(ffi::snd_pcm_open(&mut pcm.i, name.as_ptr(), stream.to_ffi(), mode.to_ffi()));
+            alsa_ok!(ffi::snd_pcm_set_params(pcm.i, format.to_ffi(), access.to_ffi(),
+                                             channels as u32, rate as u32, 1i32, 500000u32));
+            alsa_ok!(ffi::snd_pcm_prepare(pcm.i));
         }
 
         Ok(pcm)
     }
 }
 
-impl PCM<Open> {
-    pub fn set_parameters(self, format: Format, access: Access, channels: usize, rate: usize)
-        -> Result<PCM<Prepared>, (PCM<Open>, isize)>
-    {
-        unsafe {
-            let err = ffi::snd_pcm_set_params(self.i, format.to_ffi(), access.to_ffi(),
-                                              channels as u32, rate as u32, 1i32, 500000u32);
-            if err < 0 {
-                return Err((self, err as isize))
-            }
-
-            let err = ffi::snd_pcm_prepare(self.i);
-            if err < 0 {
-                return Err((self, err as isize))
-            }
-        }
-
-        Ok(
-            PCM {
-                i: self.i,
-                data: Prepared {
-                    channels: channels,
-                    sample_fmt: format
-                }
-            }
-        )
-    }
-
-}
-
-impl PCM<Prepared> {
+impl PCM {
     pub fn write_interleaved<T: Copy>(&mut self, buffer: &[T]) -> Result<usize, isize> {
-        let channels = self.data.channels;
+        let channels = self.channels;
 
         assert_eq!(buffer.len() % channels, 0);
-        assert_eq!(::std::mem::size_of::<T>(), self.data.sample_fmt.size());
+        assert_eq!(::std::mem::size_of::<T>(), self.sample_fmt.size());
 
         let n_written = unsafe {
             alsa_ok!(ffi::snd_pcm_writei(self.i, buffer.as_ptr() as *const libc::c_void,
@@ -173,10 +137,12 @@ impl PCM<Prepared> {
     }
 }
 
-impl <State> Drop for PCM<State> {
+impl Drop for PCM {
     fn drop(&mut self) {
         unsafe {
-            ffi::snd_pcm_close(self.i);
+            if !self.i.is_null() {
+                ffi::snd_pcm_close(self.i);
+            }
         }
     }
 }
