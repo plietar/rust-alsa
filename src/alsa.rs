@@ -122,7 +122,7 @@ impl PCM {
 }
 
 impl PCM {
-    pub fn write_interleaved<T: Copy>(&mut self, buffer: &[T]) -> Result<usize, isize> {
+    pub fn write_interleaved<T: Copy>(&self, buffer: &[T]) -> Result<usize, isize> {
         let channels = self.channels;
 
         assert_eq!(buffer.len() % channels, 0);
